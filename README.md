@@ -1,27 +1,49 @@
 # SynapseFast
 
-An experimental ML ops library with a clean Python API and a high-performance architecture:
-- Rust for planning/dispatch (autotuning heuristics, backend selection)
-- C++/CUDA for optional GPU kernels
-- Zig build scripts for reproducible kernel/build orchestration (optional)
+High-performance **ML ops for Python** with a clean API and pragmatic speed strategy:
 
-This repo is correctness-first. When CUDA kernels are unavailable, the Python API falls back to PyTorch reference implementations.
+- **Fast by default**: `backend="auto"` uses **PyTorch SDPA** unless you enable autotune or explicitly request custom CUDA.
+- **Optional custom kernels**: C++/CUDA extension (runtime-compiled) for experimentation and niche wins.
+- **Planner architecture**: Rust (PyO3) module for backend planning/dispatch (extensible, future autotune hooks).
+- **Benchmarks + training**: reproducible benchmark scripts + a minimal ToyGPT training loop.
+
+## What you get
+
+- **Attention**: causal + non-causal (`B,H,T,D` layout)
+- **KV cache**: prefill + decode helpers (CPU reference + optional CUDA)
+- **Norms/activations**: RMSNorm, LayerNorm, GELU
+- **Sklearn-like utilities**: `StandardScaler`, `Pipeline`, small tabular models
+- **Optional integrations**: HuggingFace, spaCy, OpenCV, LightGBM, CatBoost (installed via extras)
 
 ## Install
+
+Editable dev install:
 
 ```bash
 pip install -e .
 ```
 
-Optional CUDA kernels compile at runtime (when `nvcc` is available). If you want to prebuild kernels, see `zig/build.zig`.
+Install optional extras:
 
-On Windows, CUDA extension builds require MSVC (`cl.exe`). If you don't want to manually open a VS Developer Prompt, use:
+```bash
+pip install -e ".[dev]"
+pip install -e ".[data,sklearn]"
+pip install -e ".[xgb]"
+pip install -e ".[lightgbm,catboost]"
+pip install -e ".[nlp,spacy]"
+pip install -e ".[cv]"
+```
+
+### CUDA extension notes (Windows)
+
+The CUDA extension is compiled at runtime when needed. On Windows this requires MSVC (`cl.exe`).
+If you don’t want to open a VS Developer Prompt manually:
 
 ```powershell
 .\scripts\run_with_msvc.ps1 python -c "import synapsefast._cuda_ops as co; print(co.cuda_ext_loaded())"
 ```
 
-## Usage
+## Quickstart
 
 ```python
 import torch
@@ -32,61 +54,62 @@ q = torch.randn(B, H, T, D, device="cuda", dtype=torch.float16)
 k = torch.randn(B, H, T, D, device="cuda", dtype=torch.float16)
 v = torch.randn(B, H, T, D, device="cuda", dtype=torch.float16)
 
-out = sf.attention(q, k, v, causal=False)
+out = sf.attention(q, k, v, causal=False)  # backend="auto" by default
 ```
 
-Optional backend control:
+Backend control:
 
 ```python
 out = sf.attention(q, k, v, causal=False, backend="torch")  # force PyTorch SDPA
-out = sf.attention(q, k, v, causal=False, backend="cuda")   # try custom CUDA kernels
+out = sf.attention(q, k, v, causal=False, backend="cuda")   # try custom CUDA kernels (if available)
 ```
 
-## Testing
+## Benchmarks
+
+Benchmarks are **CUDA-event timed** for accuracy and live in `bench/`.
+
+Run a compare sweep (and write JSON for plotting):
 
 ```bash
-pytest -q
+python bench/compare_attention.py --dtype fp16 --B 1 --H 8 --D 64 --T_list 128,256,512,1024 --json_out docs/benchmarks/compare_noncausal.json
+python bench/compare_attention.py --dtype fp16 --causal --B 1 --H 8 --D 64 --T_list 128,256,512,1024 --json_out docs/benchmarks/compare_causal.json
 ```
 
-Tests that require CUDA kernels are skipped when kernels are not available.
-
-## Benchmarking
+Generate plots:
 
 ```bash
-python bench/bench_attention.py --dtype fp16 --B 1 --H 8 --D 64 --T_list 128,256,512
+python bench/plot_attention_results.py --in_json docs/benchmarks/compare_noncausal.json --out_png docs/benchmarks/compare_noncausal_bar.png --kind bar
+python bench/plot_attention_results.py --in_json docs/benchmarks/compare_causal.json --out_png docs/benchmarks/compare_causal_bar.png --kind bar
 ```
 
-Add `--causal` for causal attention. If `xformers` is installed, it will be benchmarked as well.
+### Latest results (this repo)
 
-Compare against other attention backends (CUDA events timing):
+**Non-causal attention**
 
-```bash
-python bench/compare_attention.py --dtype fp16 --B 1 --H 8 --D 64 --T_list 128,256,512,1024
-python bench/compare_attention.py --dtype fp16 --causal --B 1 --H 8 --D 64 --T_list 128,256,512,1024
-```
+![](docs/benchmarks/compare_noncausal_bar.png)
 
-Latest benchmark plots:
-- `docs/benchmarks/compare_noncausal.png`
-- `docs/benchmarks/compare_causal.png`
+**Causal attention**
 
-Max-speed mode (autotunes + caches best backend per shape/GPU):
+![](docs/benchmarks/compare_causal_bar.png)
+
+### Autotune mode (max speed)
+
+When enabled, SynapseFast will benchmark available backends (Torch / CUDA / xFormers if installed) and cache the best per shape/GPU:
 
 ```powershell
 $env:SYNAPSEFAST_AUTOTUNE="1"
 python bench/autotune_attention.py --dtype fp16 --B 1 --H 8 --D 64 --T_list 128,256,512,1024
 ```
 
-Note on `backend="auto"`:
+Notes:
 - `backend="auto"` defaults to **PyTorch SDPA** unless autotune is enabled.
-- To force SynapseFast custom CUDA attention, use `backend="cuda"` or:
+- To force custom CUDA attention, use `backend="cuda"` or set:
 
 ```powershell
 $env:SYNAPSEFAST_FORCE_CUSTOM_CUDA="1"
 ```
 
-## Training Example (Toy GPT)
-
-This repo includes a tiny GPT-style training script that uses `synapsefast` attention/norm/gelu.
+## Training example (ToyGPT)
 
 ```bat
 set SYNAPSEFAST_USE_CUSTOM_CUDA=1
@@ -99,38 +122,24 @@ Resume from a checkpoint:
 python examples/train_toy_gpt.py --device cuda --dtype fp16 --resume runs\<your_run>\ckpt_step_00000050.pt
 ```
 
-## “Classic ML” (NumPy / Pandas / scikit-learn / XGBoost)
-
-Install extras:
+## Tests
 
 ```bash
-pip install -e ".[data,sklearn]"
-pip install -e ".[xgb]"
+pytest -q
 ```
 
-Run demos:
+CUDA-kernel tests are skipped automatically when the extension can’t be built/loaded.
 
-```bash
-python examples/sklearn_tabular_demo.py
-python examples/xgboost_tabular_demo.py
-python examples/synapsefast_sklearn_like_demo.py
-```
+## Project structure
 
-## Optional Integrations (wrappers)
+- `synapsefast/`: Python API (fallback-first, user-facing)
+- `crates/synapsefast-planner/`: Rust planner module (PyO3)
+- `csrc/synapsefast_cuda/`: C++/CUDA extension sources
+- `bench/`: benchmarks + plotting utilities
+- `examples/`: ToyGPT + classic ML + optional integration demos
 
-Install extras:
+## Roadmap (high-signal)
 
-```bash
-pip install -e ".[lightgbm]"
-pip install -e ".[catboost]"
-pip install -e ".[nlp]"
-pip install -e ".[spacy]"
-pip install -e ".[cv]"
-```
-
-Run demos:
-
-```bash
-python examples/hf_text_classify_demo.py
-```
-
+- KV-cache autotune (decode/prefill), where wins are often larger than prefill attention
+- More kernel variants (FlashAttention-like), shape specialization, and better heuristics
+- A small CI workflow to run CPU tests + formatting/lint on PRs

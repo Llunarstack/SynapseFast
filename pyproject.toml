@@ -20,6 +20,11 @@ dependencies = [
   "torch>=2.1.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Llunarstack/SynapseFast"
+Repository = "https://github.com/Llunarstack/SynapseFast"
+Issues = "https://github.com/Llunarstack/SynapseFast/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "numpy>=1.26.0"]
 data = ["numpy>=1.26.0", "pandas>=2.2.0", "scipy>=1.11.0"]
