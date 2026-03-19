@@ -1,0 +1,48 @@
+[build-system]
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "synapsefast"
+version = "0.1.0"
+description = "Clean, extensible Python ML ops with Rust planning and optional CUDA kernels."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SynapseFast" }]
+keywords = ["ml", "attention", "cuda", "rust", "zig"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Rust",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "torch>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "numpy>=1.26.0"]
+data = ["numpy>=1.26.0", "pandas>=2.2.0", "scipy>=1.11.0"]
+sklearn = ["scikit-learn>=1.4.0"]
+xgb = ["xgboost>=2.0.0"]
+lightgbm = ["lightgbm>=4.0.0"]
+catboost = ["catboost>=1.2.0"]
+nlp = ["transformers>=4.40.0", "tokenizers>=0.15.0", "datasets>=2.18.0", "accelerate>=0.30.0"]
+spacy = ["spacy>=3.7.0"]
+cv = ["opencv-python>=4.8.0"]
+pymc = ["pymc>=5.10.0", "arviz>=0.16.0"]
+rl = ["stable-baselines3>=2.3.0", "gymnasium>=0.29.0"]
+tf = ["tensorflow>=2.16.0", "keras>=3.0.0"]
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "synapsefast._planner_ext"
+manifest-path = "crates/synapsefast-planner/Cargo.toml"
+python-source = "."
+features = ["pyo3/extension-module"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+

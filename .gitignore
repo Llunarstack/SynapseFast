@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.dll
+*.dylib
+*.o
+*.obj
+*.lib
+*.exp
+*.pdb
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+dist/
+build/
+target/
+
+# Local artifacts / outputs (keep generated plots in docs/benchmarks/)
+bench/artifacts/
+runs/
+

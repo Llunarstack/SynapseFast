@@ -1,0 +1,13 @@
+[package]
+name = "synapsefast-planner"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "_planner_ext"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22.5", features = ["extension-module"] }
+
